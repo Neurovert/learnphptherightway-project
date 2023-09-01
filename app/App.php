@@ -1,72 +1,64 @@
 <?php
+declare(strict_types=1);
 
-declare(strict_types = 1);
-
-function getTransactionFiles(string $dirPath): array
+// Get all files in directory
+function getFiles(string $srcDir): array
 {
     $files = [];
 
-    foreach (scandir($dirPath) as $file) {
+    foreach (scandir($srcDir) as $file) {
         if (is_dir($file)) {
             continue;
         }
-
-        $files[] = $dirPath . $file;
+        $files[] = $srcDir . $file;
     }
-
     return $files;
 }
 
-function getTransactions(string $fileName, ?callable $transactionHandler = null): array
+// Read file contents
+function getTransactions(string $filePath): array
 {
-    if (! file_exists($fileName)) {
-        trigger_error('File "' . $fileName . '" does not exist.', E_USER_ERROR);
-    }
-
-    $file = fopen($fileName, 'r');
-
-    fgetcsv($file);
-
     $transactions = [];
+    // Open the file for reading
+    $fileResource = fopen($filePath, 'r');
+    if ($fileResource) {
+        $firstLine = fgets($fileResource); // Read the first line
 
-    while (($transaction = fgetcsv($file)) !== false) {
-        if ($transactionHandler !== null) {
-            $transaction = $transactionHandler($transaction);
+        // Loop through the file line by line
+        while (($line = fgets($fileResource)) !== false) {
+            // TODO Validate line contains valid columns and corresponding cells
+            $lineColumns = [];
+
+            // Split line into 2 segments, before and after '"'
+            $intermediates = explode('"', $line);
+
+            // Remove trailing comma
+            $firstSegment = rtrim($intermediates[0], ',');
+            // Split first segment
+            $firstSegment = explode(",", $firstSegment);
+            $lineColumns = array_merge($firstSegment, [$intermediates[1]]);
+
+            $transaction = [];
+            foreach ($lineColumns as $column) {
+                $transaction[] = $column;
+            }
+            $transactions[] = $transaction;
         }
 
-        $transactions[] = $transaction;
+        fclose($fileResource);
+    } else {
+        echo "Failed to open the file.";
     }
-
     return $transactions;
 }
 
-function extractTransaction(array $transactionRow): array
+function getTransactionData(array $transaction): array
 {
-    [$date, $checkNumber, $description, $amount] = $transactionRow;
-
-    $amount = (float) str_replace(['$', ','], '', $amount);
-
+    [$date, $checkNumber, $description, $amount] = $transaction;
     return [
-        'date'        => $date,
+        'date' => date('M j, Y', strtotime($date)),
         'checkNumber' => $checkNumber,
         'description' => $description,
-        'amount'      => $amount,
+        'amount' => str_replace(["$", ","], "", $amount)
     ];
-}
-
-function calculateTotals(array $transactions): array
-{
-    $totals = ['netTotal' => 0, 'totalIncome' => 0, 'totalExpense' => 0];
-
-    foreach ($transactions as $transaction) {
-        $totals['netTotal'] += $transaction['amount'];
-
-        if ($transaction['amount'] >= 0) {
-            $totals['totalIncome'] += $transaction['amount'];
-        } else {
-            $totals['totalExpense'] += $transaction['amount'];
-        }
-    }
-
-    return $totals;
 }
